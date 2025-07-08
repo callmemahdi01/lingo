@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fa" dir="ltr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lingo Player</title>
+    <meta name="theme-color" content="#1e1e1e" />
+    <link rel="manifest" href="src/manifest.json" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="src/style.css" />
+    <script src="src/script.js" defer></script>
+</head>
+<body>
+    <div id="initial-screen" class="initial-screen">
+        <button id="load-directory-button" class="initial-screen__button">
+            📂 انتخاب پوشه ویدیو
+        </button>
+        <p class="initial-screen__drop-hint">
+            یا پوشه را اینجا بکشید و رها کنید
+        </p>
+        <div id="recent-directories-container" class="recent-directories" style="display: none">
+            <h3 class="recent-directories__title">پوشه‌های اخیر</h3>
+            <ul id="recent-directories-list" class="recent-directories__list"></ul>
+        </div>
+    </div>
+
+    <div id="video-player" class="video-player" style="display: none">
+        <div class="video-player__drop-zone">
+            <p>پوشه جدید را برای باز کردن رها کنید</p>
+        </div>
+
+        <div class="fixed">
+            <div class="video-player__video-container">
+                <video id="video-element" controlslist="nodownload" preload="metadata"></video>
+                <div id="feedback-display" class="feedback-display">
+                    <span id="feedback-display-text" class="feedback-display__text"></span>
+                    <div id="feedback-display-progress-bar" class="feedback-display__progress-bar" style="display: none">
+                        <div id="feedback-display-progress-fill" class="feedback-display__progress-fill"></div>
+                    </div>
+                </div>
+                <div id="custom-controls" class="custom-controls">
+                    <div class="controls-bottom">
+                        <div class="controls-left">
+                            <button id="play-pause-btn" class="control-btn" title="پخش/توقف (Space)">
+                                <svg class="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>
+                                <svg class="icon-pause" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>
+                            </button>
+                            <div class="time-display">
+                                <span id="current-time">00:00</span> / <span id="duration">00:00</span>
+                            </div>
+                        </div>
+                        <div class="controls-right">
+                            <button id="fullscreen-btn" class="control-btn" title="تمام‌صفحه (Enter)">
+                                <svg class="icon-fullscreen-enter" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"></path></svg>
+                                <svg class="icon-fullscreen-exit" viewBox="0 0 24 24"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar">
+                            <div class="progress-bar__buffered"></div>
+                            <div class="progress-bar__watched"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="resize-handle" class="resize-handle"></div>
+            <div class="tabs">
+                <button id="subtitle-tab" class="tab-btn tab-btn--active">📄 subtitles</button>
+                <button id="saved-tab" class="tab-btn" data-count="0">🔖 saved</button>
+                <button id="settings-tab" class="tab-btn">⚙️ settings</button>
+            </div>
+        </div>
+
+        
+
+        <div class="subtitle-section">
+            <div id="subtitle-panel" class="subtitle-panel">
+                <div class="subtitle-panel__loading">... در حال بارگذاری</div>
+            </div>
+            <div id="saved-cues-panel" class="subtitle-panel" style="display: none">
+                <div class="subtitle-panel__loading">... در حال بارگذاری</div>
+            </div>
+            <div id="settings-panel" class="subtitle-panel" style="display: none;">
+                 </div>
+        </div>
+    </div>
+</body>
+</html>
