@@ -24,6 +24,11 @@
             <h3 class="recent-directories__title">پوشه‌های اخیر</h3>
             <ul id="recent-directories-list" class="recent-directories__list"></ul>
         </div>
+
+        <div id="home-saved-items-container" class="home-saved-items" style="display: none;">
+            <h3 class="home-saved-items__title">آیتم‌های ذخیره شده</h3>
+            <ul id="home-saved-items-list" class="home-saved-items__list"></ul>
+        </div>
     </div>
 
     <div id="video-player" class="video-player" style="display: none">
@@ -68,6 +73,7 @@
             </div>
             <div id="resize-handle" class="resize-handle"></div>
             <div class="tabs">
+                <button id="home-btn" class="tab-btn">🏠 Home</button>
                 <button id="subtitle-tab" class="tab-btn tab-btn--active">📄 subtitles</button>
                 <button id="saved-tab" class="tab-btn" data-count="0">🔖 saved</button>
                 <button id="settings-tab" class="tab-btn">⚙️ settings</button>

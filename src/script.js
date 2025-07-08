@@ -1,8 +1,9 @@
 class VideoPlayer {
-    constructor(directoryName, fileURLs, directoryHandle) {
+    constructor(directoryName, fileURLs, directoryHandle, appManager) {
         this.directoryName = directoryName;
         this.fileURLs = fileURLs;
         this.directoryHandle = directoryHandle;
+        this.appManager = appManager; // Store AppManager instance
 
         this.initProperties();
         this.initUI();
@@ -59,6 +60,7 @@ class VideoPlayer {
             subtitleTab: getElement('subtitle-tab'),
             savedTab: getElement('saved-tab'),
             settingsTab: getElement('settings-tab'),
+            homeBtn: getElement('home-btn'), // Add home button
             videoContainer: querySelector('.video-player__video-container'),
             customControls: getElement('custom-controls'),
             playPauseBtn: getElement('play-pause-btn'),
@@ -130,6 +132,7 @@ class VideoPlayer {
             'subtitleTab': [['click', () => this.switchTab('subtitles')]],
             'savedTab': [['click', () => this.switchTab('saved')]],
             'settingsTab': [['click', () => this.switchTab('settings')]],
+            'homeBtn': [['click', this.goHome]], // Add listener for home button
             'document': [
                 ['keydown', this.handleKeyboardInput],
                 ['fullscreenchange', this.handleFullscreenChange],
@@ -671,6 +674,11 @@ class VideoPlayer {
         }
     }
 
+    goHome() {
+        this.destroy(); // Clean up video player resources
+        this.appManager.showInitialScreen(); // Tell AppManager to show the initial screen
+    }
+
     destroy() {
         this.saveVideoProgress();
         this.saveSavedCues();
@@ -715,6 +723,8 @@ class AppManager {
             recentDirectoriesList: getElement('recent-directories-list'),
             recentDirectoriesContainer: getElement('recent-directories-container'),
             dropHint: document.querySelector('.initial-screen__drop-hint'),
+            homeSavedItemsContainer: getElement('home-saved-items-container'),
+            homeSavedItemsList: getElement('home-saved-items-list'),
         };
     }
 
@@ -728,6 +738,7 @@ class AppManager {
             await this.initDatabase();
             await this.renderRecentDirectories();
         }
+        await this.renderGlobalSavedItems(); // Render saved items on initial load
     }
 
     setupMobile() {
@@ -830,25 +841,120 @@ class AppManager {
         } catch (err) {
             console.error('Error processing directory:', err);
             alert('پوشه باید شامل movie.mp4، en.vtt و fa.vtt باشد.');
-            this.showInitialScreen();
+            await this.showInitialScreen();
         }
     }
 
     async launchPlayer(directoryName, fileURLs, directoryHandle) {
         if (this.currentPlayer) {
             this.currentPlayer.destroy();
+            this.currentPlayer = null;
         }
         this.ui.initialScreen.style.display = 'none';
         this.ui.player.style.display = 'flex';
-        document.getElementById('subtitle-panel').innerHTML = '<div class="subtitle-panel__loading">... در حال بارگذاری زیرنویس</div>';
+        // Reset subtitle panel content for the new video
+        const subtitlePanel = document.getElementById('subtitle-panel');
+        if (subtitlePanel) {
+            subtitlePanel.innerHTML = '<div class="subtitle-panel__loading">... در حال بارگذاری زیرنویس</div>';
+        }
+         // Reset saved cues panel content
+        const savedCuesPanel = document.getElementById('saved-cues-panel');
+        if (savedCuesPanel) {
+            savedCuesPanel.innerHTML = '<div class="subtitle-panel__loading">... در حال بارگذاری</div>';
+        }
+        // Reset settings panel
+        const settingsPanel = document.getElementById('settings-panel');
+        if (settingsPanel) {
+            settingsPanel.innerHTML = '';
+        }
+        // Ensure subtitle tab is active by default
+        document.getElementById('subtitle-tab')?.classList.add('tab-btn--active');
+        document.getElementById('saved-tab')?.classList.remove('tab-btn--active');
+        document.getElementById('settings-tab')?.classList.remove('tab-btn--active');
 
-        this.currentPlayer = new VideoPlayer(directoryName, fileURLs, directoryHandle);
+
+        this.currentPlayer = new VideoPlayer(directoryName, fileURLs, directoryHandle, this); // Pass AppManager instance
 
         if (directoryHandle && this.database) {
             await this.saveRecentDirectory(directoryHandle);
-            await this.renderRecentDirectories();
+            // No need to render recent directories here, showInitialScreen will do it
         }
     }
+
+    async showInitialScreen() {
+        if (this.currentPlayer) {
+            // If a player exists, it means we are navigating back, so destroy it.
+            // The destroy method is now called by VideoPlayer.goHome() before this.
+            // this.currentPlayer.destroy(); // This might be redundant if goHome always calls destroy
+            this.currentPlayer = null;
+        }
+        this.ui.player.style.display = 'none';
+        this.ui.initialScreen.style.display = 'flex';
+
+        if (!this.isMobile && this.database) {
+            await this.renderRecentDirectories();
+        }
+        await this.renderGlobalSavedItems(); // Also update saved items when returning home
+    }
+
+    async renderGlobalSavedItems() {
+        this.ui.homeSavedItemsList.innerHTML = ''; // Clear previous items
+        let allSavedCues = [];
+
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('saved_cues_')) {
+                const directoryName = key.substring('saved_cues_'.length);
+                try {
+                    const cuesString = localStorage.getItem(key);
+                    const cues = JSON.parse(cuesString);
+                    if (Array.isArray(cues)) {
+                        cues.forEach(cue => {
+                            allSavedCues.push({ ...cue, directoryName });
+                        });
+                    }
+                } catch (error) {
+                    console.error(`Error parsing saved cues for ${directoryName}:`, error);
+                }
+            }
+        }
+
+        if (allSavedCues.length > 0) {
+            const fragment = document.createDocumentFragment();
+            // Sort by directory name, then by time (optional, but good for consistency)
+            allSavedCues.sort((a, b) => {
+                if (a.directoryName < b.directoryName) return -1;
+                if (a.directoryName > b.directoryName) return 1;
+                return a.time - b.time;
+            });
+
+            allSavedCues.forEach(cue => {
+                const item = document.createElement('li');
+                item.className = 'home-saved-item';
+                item.innerHTML = `
+                    <div class="home-saved-item__source">Video: ${cue.directoryName}</div>
+                    <div class="home-saved-item__en">${cue.en}</div>
+                    <div class="home-saved-item__fa">${cue.fa}</div>
+                `;
+                // Potentially add a click handler to load this video and seek to the cue time
+                item.addEventListener('click', async () => {
+                    // This is a more advanced feature: find the directory handle and launch
+                    // console.log(`Clicked saved item from ${cue.directoryName} at time ${cue.time}`);
+                    // For now, just log. To implement fully, we'd need to:
+                    // 1. Find the directoryHandle (e.g., from recent directories in IndexedDB)
+                    // 2. Call this.loadFromDirectory(handle)
+                    // 3. Once player is loaded, seek to cue.time. This requires VideoPlayer to accept a start time.
+                    alert(`Item from: ${cue.directoryName}\nTime: ${cue.time}\nEN: ${cue.en}\nFA: ${cue.fa}`);
+                });
+                fragment.appendChild(item);
+            });
+            this.ui.homeSavedItemsList.appendChild(fragment);
+            this.ui.homeSavedItemsContainer.style.display = 'block';
+        } else {
+            this.ui.homeSavedItemsContainer.style.display = 'none';
+        }
+    }
+
 
     async initDatabase() {
         if (!('indexedDB' in window)) return;

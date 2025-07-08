@@ -360,6 +360,12 @@ video::-webkit-media-controls {
     position: relative;
 }
 
+#home-btn {
+    /* Add specific styles if needed, otherwise it inherits .tab-btn styles */
+    /* For example, to make it slightly different: */
+    /* font-weight: bold; */
+}
+
 .tab-btn:hover {
     color: var(--text-color);
 }
@@ -665,6 +671,64 @@ input:checked + .toggle-slider:before {
     outline: none;
     border-color: var(--primary-color);
 }
+
+.home-saved-items {
+    width: 100%;
+    margin-top: 20px;
+}
+
+.home-saved-items__title {
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+    color: var(--text-secondary-color);
+    border-bottom: 1px solid var(--border-color);
+    text-align: right;
+}
+
+.home-saved-items__list {
+    max-height: 250px; /* Adjust as needed */
+    list-style: none;
+    overflow-y: auto;
+    padding-right: 5px; /* For scrollbar */
+}
+
+.home-saved-item {
+    padding: 12px 15px;
+    margin-bottom: 8px;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    transition: background-color 0.2s;
+}
+
+.home-saved-item:hover {
+    background-color: var(--hover-bg);
+}
+
+.home-saved-item__source {
+    font-size: 0.8em;
+    color: var(--text-secondary-color);
+    margin-bottom: 5px;
+    text-align: left;
+    direction: ltr; /* Assuming source names are LTR */
+}
+
+.home-saved-item__en {
+    font-size: 1em;
+    font-weight: bold;
+    color: var(--text-color);
+    margin-bottom: 5px;
+    direction: ltr;
+    text-align: left;
+}
+
+.home-saved-item__fa {
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+    direction: rtl;
+    text-align: right;
+}
+
 
 @media (max-width: 768px) {
     body {
