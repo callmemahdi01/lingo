@@ -47,7 +47,7 @@ body.is-scrubbing {
     align-items: center;
     gap: 20px;
     width: 100%;
-    max-width: 40rem;
+    max-width: 500px;
     padding: 20px;
     text-align: center;
     border: 2px dashed var(--border-color);
@@ -672,61 +672,152 @@ input:checked + .toggle-slider:before {
     border-color: var(--primary-color);
 }
 
-.home-saved-items {
+/* Modal Styles */
+.modal {
+    position: fixed;
+    z-index: 10000; /* High z-index to be on top */
+    left: 0;
+    top: 0;
     width: 100%;
-    margin-top: 20px;
+    height: 100%;
+    overflow: auto; /* Enable scroll if needed */
+    background-color: rgba(0, 0, 0, 0.6); /* Dim background */
+    display: flex; /* Used to center modal content */
+    align-items: center;
+    justify-content: center;
 }
 
-.home-saved-items__title {
-    padding-bottom: 5px;
-    margin-bottom: 10px;
-    color: var(--text-secondary-color);
-    border-bottom: 1px solid var(--border-color);
-    text-align: right;
-}
-
-.home-saved-items__list {
-    max-height: 250px; /* Adjust as needed */
-    list-style: none;
-    overflow-y: auto;
-    padding-right: 5px; /* For scrollbar */
-}
-
-.home-saved-item {
-    padding: 12px 15px;
-    margin-bottom: 8px;
+.modal-content {
     background-color: var(--surface-color);
+    color: var(--text-color);
+    margin: auto;
+    padding: 20px;
     border: 1px solid var(--border-color);
-    border-radius: 8px;
-    transition: background-color 0.2s;
+    border-radius: 10px;
+    width: 80%;
+    max-width: 700px; /* Max width of modal */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    max-height: 80vh; /* Max height of modal */
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 15px;
+}
+
+.modal-header h2 {
+    margin: 0;
+    color: var(--primary-color);
+}
+
+.modal-close-btn {
+    color: var(--text-secondary-color);
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 5px;
+    line-height: 1;
+}
+
+.modal-close-btn:hover,
+.modal-close-btn:focus {
+    color: var(--error-color);
+    text-decoration: none;
+}
+
+.modal-body {
+    overflow-y: auto; /* Scroll for content if it overflows */
+}
+
+/* Re-use .home-saved-items__list styles for the list inside modal */
+.home-saved-items__list {
+    list-style: none;
+    padding: 0 5px 5px 5px; /* Add some padding around the list */
+    margin: 0;
+    /* max-height calculation might need adjustment if padding/margins change significantly in modal-body */
+    max-height: calc(80vh - 120px); /* Adjusted for typical header and some spacing */
+    overflow-y: auto;
+}
+
+/* Enhanced Styles for individual items inside the modal list */
+.home-saved-item {
+    padding: 15px;
+    margin-bottom: 12px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--primary-color); /* Accent border */
+    border-radius: 6px;
+    transition: background-color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: relative; /* For potential absolute positioning of delete button */
 }
 
 .home-saved-item:hover {
     background-color: var(--hover-bg);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
 
 .home-saved-item__source {
-    font-size: 0.8em;
+    font-size: 0.85em;
     color: var(--text-secondary-color);
-    margin-bottom: 5px;
+    margin-bottom: 8px;
     text-align: left;
-    direction: ltr; /* Assuming source names are LTR */
+    direction: ltr;
+    font-style: italic;
 }
 
 .home-saved-item__en {
-    font-size: 1em;
-    font-weight: bold;
+    font-size: 1.05em; /* Slightly larger */
+    font-weight: 600; /* Bolder */
     color: var(--text-color);
-    margin-bottom: 5px;
+    margin-bottom: 8px;
+    line-height: 1.5;
     direction: ltr;
     text-align: left;
 }
 
 .home-saved-item__fa {
-    font-size: 0.9em;
-    color: var(--text-secondary-color);
+    font-size: 1em; /* Slightly larger */
+    color: var(--secondary-color); /* Use secondary color for Persian for differentiation */
+    line-height: 1.6;
     direction: rtl;
     text-align: right;
+}
+
+.home-saved-item__delete-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: var(--text-secondary-color);
+    font-size: 18px; /* Adjust size as needed */
+    cursor: pointer;
+    padding: 5px;
+    line-height: 1;
+    border-radius: 50%;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.home-saved-item__delete-btn:hover {
+    color: var(--error-color);
+    background-color: rgba(207, 102, 121, 0.1); /* Light error color background */
+}
+
+
+/* Ensure the modal body has some padding if the list doesn't fill it */
+.modal-body {
+    overflow-y: auto;
+    padding: 5px 0px; /* Add some padding to the sides of the body */
 }
 
 

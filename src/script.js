@@ -1,9 +1,10 @@
 class VideoPlayer {
-    constructor(directoryName, fileURLs, directoryHandle, appManager) {
+    constructor(directoryName, fileURLs, directoryHandle, appManager, startTime = 0) {
         this.directoryName = directoryName;
         this.fileURLs = fileURLs;
         this.directoryHandle = directoryHandle;
-        this.appManager = appManager; // Store AppManager instance
+        this.appManager = appManager;
+        this.startTime = startTime; // Store startTime
 
         this.initProperties();
         this.initUI();
@@ -23,6 +24,7 @@ class VideoPlayer {
             controlsTimeoutId: null,
             saveProgressTimeoutId: null,
             syncRequestId: null,
+            initialSeekPerformed: false, // Flag to ensure seek only happens once
         };
 
         this.config = {
@@ -107,7 +109,18 @@ class VideoPlayer {
 
         const eventListeners = {
             'video': [
-                ['loadedmetadata', () => { this.updateTimeDisplay(); this.adjustLayout(); }],
+                ['loadedmetadata', () => {
+                    this.updateTimeDisplay();
+                    this.adjustLayout();
+                    if (this.startTime > 0 && !this.state.initialSeekPerformed) {
+                        this.seek(this.startTime);
+                        this.state.initialSeekPerformed = true;
+                        // Ensure video plays if it was meant to start from a specific time
+                        if (this.ui.video.paused) {
+                            this.play();
+                        }
+                    }
+                }],
                 ['timeupdate', () => { this.updateTimeDisplay(); this.updateProgressBar(); this.scheduleProgressSave(); }],
                 ['progress', this.updateBufferedBar],
                 ['play', this.updatePlayPauseIcon],
@@ -723,8 +736,11 @@ class AppManager {
             recentDirectoriesList: getElement('recent-directories-list'),
             recentDirectoriesContainer: getElement('recent-directories-container'),
             dropHint: document.querySelector('.initial-screen__drop-hint'),
-            homeSavedItemsContainer: getElement('home-saved-items-container'),
-            homeSavedItemsList: getElement('home-saved-items-list'),
+            // For Modal
+            showSavedItemsModalBtn: getElement('show-saved-items-modal-btn'),
+            savedItemsModal: getElement('saved-items-modal'),
+            closeSavedItemsModalBtn: getElement('close-saved-items-modal-btn'),
+            modalSavedItemsList: getElement('modal-saved-items-list'),
         };
     }
 
@@ -738,7 +754,8 @@ class AppManager {
             await this.initDatabase();
             await this.renderRecentDirectories();
         }
-        await this.renderGlobalSavedItems(); // Render saved items on initial load
+        // Initial call to renderGlobalSavedItems will also determine if the trigger button should be visible
+        await this.renderGlobalSavedItems();
     }
 
     setupMobile() {
@@ -768,6 +785,153 @@ class AppManager {
         this.ui.loadButton.addEventListener('click', () => {
             this.isMobile ? this.fileInputElement.click() : this.selectDirectory();
         });
+
+        if (this.ui.showSavedItemsModalBtn) {
+            this.ui.showSavedItemsModalBtn.addEventListener('click', () => this.openSavedItemsModal());
+        }
+        if (this.ui.closeSavedItemsModalBtn) {
+            this.ui.closeSavedItemsModalBtn.addEventListener('click', () => this.closeSavedItemsModal());
+        }
+        if (this.ui.savedItemsModal) {
+            this.ui.savedItemsModal.addEventListener('click', (event) => {
+                if (event.target === this.ui.savedItemsModal) {
+                    this.closeSavedItemsModal();
+                }
+            });
+        }
+        // Event delegation for delete buttons within the modal list
+        if (this.ui.modalSavedItemsList) {
+            this.ui.modalSavedItemsList.addEventListener('click', async (event) => {
+                const deleteButton = event.target.closest('.home-saved-item__delete-btn');
+                const savedItemElement = event.target.closest('.home-saved-item');
+
+                if (deleteButton) {
+                    const directoryName = deleteButton.dataset.directoryName;
+                    const cueIndex = parseInt(deleteButton.dataset.cueIndex, 10);
+                    if (directoryName && !isNaN(cueIndex)) {
+                        console.log(`[AppManager] Delete requested for item in ${directoryName} with index ${cueIndex}`);
+                        await this.handleDeleteSavedItem(directoryName, cueIndex);
+                    }
+                } else if (savedItemElement) { // Click was on the item itself, not the delete button
+                    const directoryName = savedItemElement.dataset.directoryName;
+                    const cueTime = parseFloat(savedItemElement.dataset.cueTime);
+                    if (directoryName && !isNaN(cueTime)) {
+                        console.log(`[AppManager] Seek requested for item in ${directoryName} at time ${cueTime}`);
+                        await this.handleSeekToSavedItem(directoryName, cueTime);
+                    }
+                }
+            });
+        }
+    }
+
+    async handleSeekToSavedItem(directoryName, cueTime) {
+        console.log(`[AppManager] Attempting to seek to ${directoryName} at ${cueTime}s`);
+        if (!this.database) {
+            alert("Database not initialized. Cannot find recent directories.");
+            return;
+        }
+
+        try {
+            const directories = await this.dbRequest(this.dbConfig.storeName, 'readonly', 'getAll');
+            const targetDir = directories.find(dir => dir.name === directoryName);
+
+            if (targetDir && targetDir.handle) {
+                const directoryHandle = targetDir.handle;
+                // Verify permission first. This might prompt the user if not already granted.
+                if (await directoryHandle.queryPermission({ mode: 'read' }) !== 'granted') {
+                    if (await directoryHandle.requestPermission({ mode: 'read' }) !== 'granted') {
+                        alert(`Permission denied for directory: ${directoryName}`);
+                        return;
+                    }
+                }
+
+                // Logic from loadFromDirectory to get file URLs
+                const getFile = async (name) => (await directoryHandle.getFileHandle(name)).getFile();
+                const [videoFile, enVttFile, faVttFile] = await Promise.all([
+                    getFile('movie.mp4'), getFile('en.vtt'), getFile('fa.vtt')
+                ]).catch(err => {
+                    console.error('Error getting files from directory handle:', err);
+                    alert(`Error accessing files in '${directoryName}'. Make sure movie.mp4, en.vtt, and fa.vtt exist.`);
+                    return null;
+                });
+
+                if (!videoFile) return; // Error already shown
+
+                const fileURLs = {
+                    videoURL: URL.createObjectURL(videoFile),
+                    enVttURL: URL.createObjectURL(enVttFile),
+                    faVttURL: URL.createObjectURL(faVttFile),
+                };
+
+                this.closeSavedItemsModal();
+                // Pass cueTime to launchPlayer
+                await this.launchPlayer(directoryName, fileURLs, directoryHandle, cueTime);
+            } else {
+                alert(`Directory "${directoryName}" not found in recent folders or handle is missing. Please open it manually first.`);
+            }
+        } catch (error) {
+            console.error("[AppManager] Error in handleSeekToSavedItem:", error);
+            alert("An error occurred while trying to open the video.");
+        }
+    }
+
+    async handleDeleteSavedItem(directoryName, cueIndex) {
+        const storageKey = `saved_cues_${directoryName}`;
+        try {
+            const cuesString = localStorage.getItem(storageKey);
+            if (!cuesString) {
+                console.error(`[AppManager] handleDeleteSavedItem: No saved cues found in localStorage for key ${storageKey}`);
+                return;
+            }
+            let cues = JSON.parse(cuesString);
+            if (!Array.isArray(cues)) {
+                console.error(`[AppManager] handleDeleteSavedItem: Saved cues for ${storageKey} is not an array.`);
+                // Optionally, clear this invalid entry
+                // localStorage.removeItem(storageKey);
+                return;
+            }
+
+            // Filter out the item to be deleted.
+            // cue.index should be the original index from that video's subtitle array.
+            const updatedCues = cues.filter(cue => cue.index !== cueIndex);
+
+            if (updatedCues.length < cues.length) { // Check if an item was actually removed
+                localStorage.setItem(storageKey, JSON.stringify(updatedCues));
+                console.log(`[AppManager] handleDeleteSavedItem: Item with index ${cueIndex} removed from ${directoryName}.`);
+                // If all cues for a directory are deleted, we could remove the key
+                // if (updatedCues.length === 0) {
+                //     localStorage.removeItem(storageKey);
+                //     console.log(`[AppManager] handleDeleteSavedItem: All items removed for ${directoryName}, key ${storageKey} deleted.`);
+                // }
+            } else {
+                console.warn(`[AppManager] handleDeleteSavedItem: Item with index ${cueIndex} not found in ${directoryName}.`);
+            }
+
+            // Refresh the modal list
+            await this.renderGlobalSavedItems();
+
+        } catch (error) {
+            console.error(`[AppManager] handleDeleteSavedItem: Error processing deletion for ${directoryName}:`, error);
+        }
+    }
+
+
+    async openSavedItemsModal() {
+        console.log('[AppManager] openSavedItemsModal: Opening modal.');
+        // Ensure the list is up-to-date before showing
+        // Note: renderGlobalSavedItems also handles visibility of the trigger button,
+        // but here we are explicitly opening the modal, so data refresh is key.
+        await this.renderGlobalSavedItems();
+        if (this.ui.savedItemsModal) {
+            this.ui.savedItemsModal.style.display = 'flex';
+        }
+    }
+
+    closeSavedItemsModal() {
+        console.log('[AppManager] closeSavedItemsModal: Closing modal.');
+        if (this.ui.savedItemsModal) {
+            this.ui.savedItemsModal.style.display = 'none';
+        }
     }
 
     async selectDirectory() {
@@ -845,35 +1009,29 @@ class AppManager {
         }
     }
 
-    async launchPlayer(directoryName, fileURLs, directoryHandle) {
+    async launchPlayer(directoryName, fileURLs, directoryHandle, startTime = 0) { // Added startTime
         if (this.currentPlayer) {
             this.currentPlayer.destroy();
             this.currentPlayer = null;
         }
         this.ui.initialScreen.style.display = 'none';
         this.ui.player.style.display = 'flex';
-        // Reset subtitle panel content for the new video
+
         const subtitlePanel = document.getElementById('subtitle-panel');
-        if (subtitlePanel) {
-            subtitlePanel.innerHTML = '<div class="subtitle-panel__loading">... در حال بارگذاری زیرنویس</div>';
-        }
-         // Reset saved cues panel content
+        if (subtitlePanel) subtitlePanel.innerHTML = '<div class="subtitle-panel__loading">... در حال بارگذاری زیرنویس</div>';
+
         const savedCuesPanel = document.getElementById('saved-cues-panel');
-        if (savedCuesPanel) {
-            savedCuesPanel.innerHTML = '<div class="subtitle-panel__loading">... در حال بارگذاری</div>';
-        }
-        // Reset settings panel
+        if (savedCuesPanel) savedCuesPanel.innerHTML = '<div class="subtitle-panel__loading">... در حال بارگذاری</div>';
+
         const settingsPanel = document.getElementById('settings-panel');
-        if (settingsPanel) {
-            settingsPanel.innerHTML = '';
-        }
-        // Ensure subtitle tab is active by default
+        if (settingsPanel) settingsPanel.innerHTML = '';
+
         document.getElementById('subtitle-tab')?.classList.add('tab-btn--active');
         document.getElementById('saved-tab')?.classList.remove('tab-btn--active');
         document.getElementById('settings-tab')?.classList.remove('tab-btn--active');
 
-
-        this.currentPlayer = new VideoPlayer(directoryName, fileURLs, directoryHandle, this); // Pass AppManager instance
+        // Pass startTime to VideoPlayer constructor
+        this.currentPlayer = new VideoPlayer(directoryName, fileURLs, directoryHandle, this, startTime);
 
         if (directoryHandle && this.database) {
             await this.saveRecentDirectory(directoryHandle);
@@ -899,7 +1057,12 @@ class AppManager {
 
     async renderGlobalSavedItems() {
         console.log('[AppManager] renderGlobalSavedItems: Starting');
-        this.ui.homeSavedItemsList.innerHTML = ''; // Clear previous items
+        // Target the list inside the modal now
+        if (!this.ui.modalSavedItemsList) {
+            console.error("[AppManager] modalSavedItemsList is not found in UI elements.");
+            return;
+        }
+        this.ui.modalSavedItemsList.innerHTML = '';
         let allSavedCues = [];
 
         console.log(`[AppManager] renderGlobalSavedItems: localStorage.length = ${localStorage.length}`);
@@ -933,7 +1096,6 @@ class AppManager {
         if (allSavedCues.length > 0) {
             console.log('[AppManager] renderGlobalSavedItems: Found saved cues, preparing to display.');
             const fragment = document.createDocumentFragment();
-            // Sort by directory name, then by time (optional, but good for consistency)
             allSavedCues.sort((a, b) => {
                 if (a.directoryName < b.directoryName) return -1;
                 if (a.directoryName > b.directoryName) return 1;
@@ -943,29 +1105,30 @@ class AppManager {
             allSavedCues.forEach(cue => {
                 const item = document.createElement('li');
                 item.className = 'home-saved-item';
+                item.dataset.directoryName = cue.directoryName; // For click-to-seek
+                item.dataset.cueTime = cue.time;               // For click-to-seek
+                item.dataset.cueIndex = cue.index;             // For deletion
+
+                // Structure for text content and a delete button
                 item.innerHTML = `
-                    <div class="home-saved-item__source">Video: ${cue.directoryName}</div>
-                    <div class="home-saved-item__en">${cue.en}</div>
-                    <div class="home-saved-item__fa">${cue.fa}</div>
+                    <div>
+                        <div class="home-saved-item__source">Video: ${cue.directoryName}</div>
+                        <div class="home-saved-item__en">${cue.en}</div>
+                        <div class="home-saved-item__fa">${cue.fa}</div>
+                    </div>
+                    <button class="home-saved-item__delete-btn"
+                            data-directory-name="${cue.directoryName}"
+                            data-cue-index="${cue.index}"
+                            title="Delete this item">🗑️</button>
                 `;
-                // Potentially add a click handler to load this video and seek to the cue time
-                item.addEventListener('click', async () => {
-                    // This is a more advanced feature: find the directory handle and launch
-                    // console.log(`Clicked saved item from ${cue.directoryName} at time ${cue.time}`);
-                    // For now, just log. To implement fully, we'd need to:
-                    // 1. Find the directoryHandle (e.g., from recent directories in IndexedDB)
-                    // 2. Call this.loadFromDirectory(handle)
-                    // 3. Once player is loaded, seek to cue.time. This requires VideoPlayer to accept a start time.
-                    alert(`Item from: ${cue.directoryName}\nTime: ${cue.time}\nEN: ${cue.en}\nFA: ${cue.fa}`);
-                });
                 fragment.appendChild(item);
             });
-            this.ui.homeSavedItemsList.appendChild(fragment);
-            this.ui.homeSavedItemsContainer.style.display = 'block';
-            console.log('[AppManager] renderGlobalSavedItems: Displaying saved items container.');
+            this.ui.modalSavedItemsList.appendChild(fragment);
+            this.ui.showSavedItemsModalBtn.style.display = 'block';
+            console.log('[AppManager] renderGlobalSavedItems: Items populated in modal list. "Show Saved Items" button visible.');
         } else {
-            this.ui.homeSavedItemsContainer.style.display = 'none';
-            console.log('[AppManager] renderGlobalSavedItems: No saved items to display, hiding container.');
+            this.ui.showSavedItemsModalBtn.style.display = 'none';
+            console.log('[AppManager] renderGlobalSavedItems: No saved items. "Show Saved Items" button hidden.');
         }
     }
 
