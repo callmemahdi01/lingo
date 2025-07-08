@@ -898,28 +898,40 @@ class AppManager {
     }
 
     async renderGlobalSavedItems() {
+        console.log('[AppManager] renderGlobalSavedItems: Starting');
         this.ui.homeSavedItemsList.innerHTML = ''; // Clear previous items
         let allSavedCues = [];
 
+        console.log(`[AppManager] renderGlobalSavedItems: localStorage.length = ${localStorage.length}`);
+
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
+            console.log(`[AppManager] renderGlobalSavedItems: Checking key: ${key}`);
             if (key.startsWith('saved_cues_')) {
                 const directoryName = key.substring('saved_cues_'.length);
+                console.log(`[AppManager] renderGlobalSavedItems: Found matching key. Directory: ${directoryName}`);
                 try {
                     const cuesString = localStorage.getItem(key);
+                    console.log(`[AppManager] renderGlobalSavedItems: Cues string for ${directoryName}: ${cuesString}`);
                     const cues = JSON.parse(cuesString);
+                    console.log(`[AppManager] renderGlobalSavedItems: Parsed cues for ${directoryName}:`, cues);
                     if (Array.isArray(cues)) {
                         cues.forEach(cue => {
                             allSavedCues.push({ ...cue, directoryName });
                         });
+                    } else {
+                        console.warn(`[AppManager] renderGlobalSavedItems: Parsed cues for ${directoryName} is not an array.`);
                     }
                 } catch (error) {
-                    console.error(`Error parsing saved cues for ${directoryName}:`, error);
+                    console.error(`[AppManager] renderGlobalSavedItems: Error parsing saved cues for ${directoryName}:`, error);
                 }
             }
         }
 
+        console.log('[AppManager] renderGlobalSavedItems: All processed cues:', allSavedCues);
+
         if (allSavedCues.length > 0) {
+            console.log('[AppManager] renderGlobalSavedItems: Found saved cues, preparing to display.');
             const fragment = document.createDocumentFragment();
             // Sort by directory name, then by time (optional, but good for consistency)
             allSavedCues.sort((a, b) => {
@@ -950,8 +962,10 @@ class AppManager {
             });
             this.ui.homeSavedItemsList.appendChild(fragment);
             this.ui.homeSavedItemsContainer.style.display = 'block';
+            console.log('[AppManager] renderGlobalSavedItems: Displaying saved items container.');
         } else {
             this.ui.homeSavedItemsContainer.style.display = 'none';
+            console.log('[AppManager] renderGlobalSavedItems: No saved items to display, hiding container.');
         }
     }
 
